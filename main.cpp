@@ -4,9 +4,21 @@
 #include<string>
 #include<mutex>
 #include<chrono>
+#include <ctime>
+#include <iomanip>
 
 using TimePoint = std::chrono::steady_clock::time_point;
-
+enum class LogLevel{
+    INFO,
+    WARNING,
+    ERROR
+};
+enum class ApiStatus{
+    SUCCESS=200,
+    CLIENT_NOT_FOUND=404,
+    CLIENT_EXIST=409,
+    RATE_LIMIT_EXCEEDED=429
+};
 // config of a particular client with their limit and window 
 struct ClientConfig{
     long long limit;
@@ -26,9 +38,50 @@ struct Client{
 
 // Api response 
 struct ApiResponse{
-    bool allowed;
-    int statuscode;
+  
+    ApiStatus status;
     std::string message;
+};
+class Logger{
+public:
+
+    void log(LogLevel level,
+             const std::string &clientid,
+             ApiStatus status,
+             const std::string &message)
+    {
+        // Get current time
+        auto now = std::chrono::system_clock::now();
+
+        std::time_t currentTime =
+            std::chrono::system_clock::to_time_t(now);
+
+        std::tm* localTime =
+            std::localtime(&currentTime);
+
+        
+        std::cout << std::put_time(localTime,"%Y-%m-%d %H:%M:%S");
+
+        std::cout << " | ";
+
+    
+        if(level == LogLevel::INFO)
+            std::cout << "INFO";
+        else if(level == LogLevel::WARNING)
+            std::cout << "WARNING";
+        else
+            std::cout << "ERROR";
+
+        // Step 4: Print everything else
+        std::cout
+            << " | "
+            << clientid
+            << " | "
+            << static_cast<int>(status)
+            << " | "
+            << message
+            << '\n';
+    }
 };
 
 class SlidingWindowRateLimiter{
@@ -36,19 +89,42 @@ class SlidingWindowRateLimiter{
 private:
     std::unordered_map<std::string,Client> clients;
     std::mutex mtx;
+    Logger logger;
 
 public:
 
     ApiResponse registerClient(const std::string &clientid,long long limit,long long window){
+
         std::lock_guard<std::mutex> lock(mtx);
+       
 
         if(!clients.count(clientid)){
             clients[clientid].config.limit = limit;
             clients[clientid].config.window = window;
-            return {true, 200, "Client Registered Successfully"};
+            logger.log(LogLevel::INFO,clientid,ApiStatus::SUCCESS, "Client Registered Successfully");
+
+            // this return dose not print anything that part is done by logger instead it return bool to the function register client
+               return {
+        
+        ApiStatus::SUCCESS,
+        "Client Registered Successfully"
+    };
         }
 
-        return {false, 409, "Client already exists"};
+        logger.log(
+    LogLevel::WARNING,
+    clientid,
+    ApiStatus::CLIENT_EXIST,
+    "Client already exists"
+);
+
+return {
+   
+    ApiStatus::CLIENT_EXIST,
+    "Client already exists"
+};
+
+       
     }
 
     bool validateClient(const std::string &clientid){
@@ -78,7 +154,11 @@ public:
         std::lock_guard<std::mutex> lock(mtx);
 
         if(!validateClient(clientid)){
-            return {false, 404, "Client not Registered"};
+            logger.log(LogLevel::ERROR,clientid,ApiStatus::CLIENT_NOT_FOUND,"Client not registered");
+            return{
+                ApiStatus::CLIENT_NOT_FOUND,
+                "Client not registered"
+            };
         }
 
         TimePoint now = std::chrono::steady_clock::now();
@@ -89,12 +169,31 @@ public:
 
         if(isAllowed(client)){
             recordRequest(client, now);
-            return {true, 200, "Request Accepted"};
+            logger.log(LogLevel::INFO,clientid,ApiStatus::SUCCESS,"Request Accepted");
+            return{
+                ApiStatus::SUCCESS,
+                "Request Accepted"
+            };
         }
-
-        return {false, 429, "Too many requests"};
+        logger.log(LogLevel::WARNING,clientid,ApiStatus::RATE_LIMIT_EXCEEDED,"Rate Limit Exceeded");
+        return { ApiStatus::RATE_LIMIT_EXCEEDED, "Rate limit Exceeded"};
     }
 };
-int main(){
+int main()
+{
+    SlidingWindowRateLimiter limiter;
 
+    limiter.registerClient("client1", 2, 10);
+
+    limiter.registerClient("client1", 2, 10);
+
+    limiter.allowRequest("client1");
+
+    limiter.allowRequest("client1");
+
+    limiter.allowRequest("client1");
+
+    limiter.allowRequest("client2");
+
+    return 0;
 }
