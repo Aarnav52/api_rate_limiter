@@ -1,0 +1,3 @@
+/Users/aarnavpatel/Desktop/project/build/CMakeFiles/ApiRateLimiter.dir
+/Users/aarnavpatel/Desktop/project/build/CMakeFiles/edit_cache.dir
+/Users/aarnavpatel/Desktop/project/build/CMakeFiles/rebuild_cache.dir

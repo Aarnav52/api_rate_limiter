@@ -183,7 +183,7 @@ int main()
 {
     SlidingWindowRateLimiter limiter;
 
-    limiter.registerClient("client1", 2, 10);
+    limiter.registerClient("client1", 2 ,10);
 
     limiter.registerClient("client1", 2, 10);
 
